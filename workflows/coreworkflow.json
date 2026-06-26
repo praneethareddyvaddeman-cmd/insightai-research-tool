@@ -1,0 +1,163 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "insightai",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -592,
+        -256
+      ],
+      "id": "f637b6eb-af2d-4124-9302-e4ef8ad3b8d2",
+      "name": "Webhook",
+      "webhookId": "5af1e5b4-90e2-49cd-ba95-c855a0a72562",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c52f3df4-58f7-425e-8e25-6072e0b346ec",
+              "name": "question",
+              "value": "{ $json.body.question }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -208,
+        -32
+      ],
+      "id": "8bd7c2f0-6709-4912-ad70-00f67a1eea29",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are a consumer research analyst helping small business brand managers make faster decisions.\n\nGiven the following research question, return ONLY a valid JSON object with exactly these fields:\n- insight: a 2-3 sentence summary of what the data/research suggests\n- confidence_level: one of \"low\", \"medium\", or \"high\"\n- recommended_action: a specific, actionable recommendation the brand manager can act on today\n- sources_used: a list of 2-3 types of sources that informed this insight\n\nResearch question: {{ $json.question }}"
+            },
+            {
+              "role": "system",
+              "content": "You are a consumer research analyst. Always respond with valid JSON only. No markdown, no explanation, just the JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        -32
+      ],
+      "id": "ea8e694a-7f5b-483e-ac01-5e7823b46883",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "2RA1CarUD35qTEJh",
+          "name": "OpenAI account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        352,
+        -32
+      ],
+      "id": "d27dcd99-0511-4fc7-a5c1-bdd5e4237af2",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -448,
+        -32
+      ],
+      "id": "b2c70c41-e83d-4d9c-b206-5d4686c331b9",
+      "name": "When chat message received",
+      "webhookId": "af216eb5-6dd5-49fb-81f0-4cd9e78882ff"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6479220b-8775-4753-8a69-b6d26cb6574e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "445f8863cceceb262797d3bb78596f0fffd3c7f832b3c52f69ebd65404dcd006"
+  },
+  "nodeGroups": [],
+  "id": "etnyyUKRlvQbWoU9",
+  "tags": []
+}
