@@ -16,3 +16,5 @@ Stack
 * Supabase — feedback and outcome logging
 * GitHub Pages — UI
 Status: Active build — pushing daily
+## Build Log
+- Day 1: Question classification (5 categories), SerpAPI web search grounding, GPT-4.1-mini synthesis pipeline working end to end
