@@ -1,0 +1,787 @@
+{
+  "name": "Azure embeddings, semantic search, Content Safety, bias detection, eval KPI views",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2368,
+        576
+      ],
+      "id": "5ae42288-cb5c-4f86-ace5-92423b4fe25d",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c52f3df4-58f7-425e-8e25-6072e0b346ec",
+              "name": "question",
+              "value": "={{ $json.body.question || $json.chatInput }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1456,
+        608
+      ],
+      "id": "463102ca-e927-4d03-8227-e9f712045032",
+      "name": "Extract Question"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=You are a research question classifier. Respond with ONLY one word from this list: brand_sentiment, competitive_intelligence, trend_analysis, market_sizing, general. No other text, no punctuation, just the one word."
+            },
+            {
+              "content": "={{ $input.first().json.question }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -384,
+        128
+      ],
+      "id": "450e933b-bdff-4ead-aec5-fc0abc60bfbb",
+      "name": "Classify Question",
+      "credentials": {
+        "openAiApi": {
+          "id": "XXX",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\n\nconst mainItem = allItems.find(item => item.json.embedding) || allItems[0];\nconst semanticItems = allItems.filter(item => item.json.similarity !== undefined);\n\nconst category = mainItem.json.category || 'general';\nconst question = mainItem.json.question;\nconst embedding = mainItem.json.embedding;\n\nconst prompts = {\n  brand_sentiment: 'You are a consumer research analyst. Focus on consumer perception, sentiment drivers, emotional associations, and brand equity signals.',\n  competitive_intelligence: 'You are a competitive intelligence analyst. Focus on market positioning, differentiation, competitive gaps, and strategic threats.',\n  trend_analysis: 'You are a market trends analyst. Focus on emerging signals, adoption trajectory, timing implications, and forward-looking opportunities.',\n  market_sizing: 'You are a market sizing analyst. Focus on TAM/SAM estimates, growth rates, key segments, and sizing methodology.',\n  general: 'You are a consumer research analyst. Provide a balanced, well-rounded analysis of the research question.'\n};\n\nlet fewShotText = '';\nif (semanticItems.length > 0) {\n  fewShotText = '\\n\\nHere are examples of highly rated insights for similar questions:\\n\\n';\n  semanticItems.forEach((ex, i) => {\n    if (ex.json.question) {\n      fewShotText += `Example ${i+1}:\\nQuestion: ${ex.json.question}\\nInsight: ${ex.json.insight}\\nAction: ${ex.json.recommended_action}\\n\\n`;\n    }\n  });\n  fewShotText += 'Match this quality and depth in your response.';\n}\n\nreturn [{\n  json: {\n    category: category,\n    question: question,\n    embedding: embedding,\n    category_prompt: prompts[category] || prompts['general'],\n    few_shot_context: fewShotText\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        512
+      ],
+      "id": "93a95f8c-457d-48c8-8677-7ffbcd0cd610",
+      "name": "Build Prompt"
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $('Build Prompt').item.json.question }}"
+            },
+            {
+              "name": "api_key",
+              "value": "XXX"
+            },
+            {
+              "name": "num",
+              "value": "5"
+            },
+            {
+              "name": "engine",
+              "value": "google"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        0,
+        592
+      ],
+      "id": "d6a8f22d-1b28-410e-959c-efb048bebb5d",
+      "name": "Web Search"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.item.json.organic_results || [];\nconst top3 = results.slice(0, 3).map(r => ({\n  title: r.title,\n  snippet: r.snippet,\n  link: r.link\n}));\n\nconst searchContext = top3.map((r, i) => \n  `Source ${i+1}: ${r.title}\\n${r.snippet}\\nURL: ${r.link}`\n).join('\\n\\n');\n\nreturn [{\n  json: {\n    question: $('Build Prompt').item.json.question,\n    category: $('Build Prompt').item.json.category,\n    category_prompt: $('Build Prompt').item.json.category_prompt,\n    search_results: top3,\n    search_context: searchContext\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        592
+      ],
+      "id": "a2f1cb03-80aa-41ff-a959-3a7765035a2e",
+      "name": "Extract Sources"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "={{ $json.category_prompt }}\n\n{{ $json.few_shot_context }}\n\nYou must base your response ONLY on the sources provided. Do not use prior knowledge.\nReturn ONLY a valid JSON object with exactly these fields:\n- insight: 2-3 sentence summary grounded in the sources\n- recommended_action: one specific actionable recommendation\n- sources_used: array of the source URLs provided\nNo markdown, no explanation, just the JSON object."
+            },
+            {
+              "content": "=Research question: {{ $json.question }}\n\nSources:\n{{ $json.search_context }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        496,
+        576
+      ],
+      "id": "2f0c0fa1-4f7b-43dd-b2b2-11b2ea34f9fb",
+      "name": "Synthesize Insight",
+      "credentials": {
+        "openAiApi": {
+          "id": "XXX",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json.output[0].content[0].text;\nconst parsed = JSON.parse(raw);\n\nconst searchResults = $('Extract Sources').item.json.search_results;\nconst sourceCount = parsed.sources_used ? parsed.sources_used.length : 0;\n\nreturn [{\n  json: {\n    question: $('Extract Sources').item.json.question,\n    category: $('Extract Sources').item.json.category,\n    insight: parsed.insight,\n    recommended_action: parsed.recommended_action,\n    sources_used: parsed.sources_used,\n    source_count: sourceCount,\n    raw_output: raw\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        208
+      ],
+      "id": "bccd46d1-d29a-4cd6-a912-8525f0ed0992",
+      "name": "Parse Output"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer XXX"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4.1\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an AI output evaluator. Check if the insight and recommended action are grounded in the sources provided. Also check if the insight shows geographic, demographic, or source bias. Return ONLY valid JSON with these fields: {\\\"grounded\\\": true/false, \\\"issues\\\": [], \\\"bias_flagged\\\": true/false, \\\"bias_note\\\": \\\"explanation or null\\\"}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Insight: {{ $json.insight }}\\n\\nRecommended Action: {{ $json.recommended_action }}\\n\\nSources:\\n{{ $json.sources_used.join('\\\\n') }}\"\n    }\n  ],\n  \"max_tokens\": 300\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        944,
+        144
+      ],
+      "id": "b786db13-ae14-40f1-877f-69b284de4d50",
+      "name": "LLM Judge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const judgeRaw = $input.item.json.choices[0].message.content;\nconst judgeResult = JSON.parse(judgeRaw);\nconst grounded = judgeResult.grounded;\nconst bias_flagged = judgeResult.bias_flagged || false;\nconst bias_note = judgeResult.bias_note || null;\n\nconst parseOutput = $('Parse Output').item.json;\nconst sourceCount = parseOutput.source_count || 0;\n\nlet confidence;\nif (grounded && sourceCount >= 3) confidence = 'high';\nelse if (grounded && sourceCount >= 1) confidence = 'medium';\nelse confidence = 'low';\n\nreturn [{\n  json: {\n    question: parseOutput.question,\n    category: parseOutput.category,\n    insight: parseOutput.insight,\n    recommended_action: parseOutput.recommended_action,\n    sources_used: parseOutput.sources_used,\n    source_count: sourceCount,\n    grounded: grounded,\n    confidence: confidence,\n    caution: !grounded,\n    caution_message: !grounded ? 'This insight may not be fully grounded in the provided sources. Please verify independently.' : null,\n    bias_flagged: bias_flagged,\n    bias_note: bias_note\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        528
+      ],
+      "id": "da9749bf-9c08-4c05-a837-463e829f6e35",
+      "name": "Final Output"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://insightsai-resource.services.ai.azure.com/openai/deployments/text-embedding-3-small/embeddings?api-version=2023-05-15",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api-key ",
+              "value": "XXX"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "input",
+              "value": "={{ $json.question }}"
+            },
+            {
+              "name": "model",
+              "value": "text-embedding-3-small"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1280,
+        608
+      ],
+      "id": "ac002775-d981-4842-b9a6-f80c3d7523a9",
+      "name": "Generate Embedding"
+    },
+    {
+      "parameters": {
+        "jsCode": "const embeddingData = $input.item.json.data[0].embedding;\n\nreturn [{\n  json: {\n    ...($('Extract Question').item.json),\n    embedding: embeddingData\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        608
+      ],
+      "id": "a9575d8a-d2dc-463c-b656-caeef71b4a87",
+      "name": "Extract Embedding"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://insightai-safety.cognitiveservices.azure.com/contentsafety/text:analyze?api-version=2023-10-01",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Ocp-Apim-Subscription-Key ",
+              "value": "xxx"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ $json.insight }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1312,
+        560
+      ],
+      "id": "a66a1eb2-109d-4b28-996e-092a89e1755b",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const safety = $input.item.json.categoriesAnalysis;\nconst finalOutput = $('Final Output').item.json;\n\nconst isFlagged = safety.some(cat => cat.severity > 2);\nconst flaggedCategories = safety\n  .filter(cat => cat.severity > 2)\n  .map(cat => cat.category);\n\nreturn [{\n  json: {\n    ...finalOutput,\n    safety_flagged: isFlagged,\n    safety_categories: flaggedCategories,\n    safety_scores: safety\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        560
+      ],
+      "id": "9f47c8f9-6130-41e8-b0c4-ef286da0e731",
+      "name": "Parse Safety Result"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://txhmcdctptwanmghzppn.supabase.co/rest/v1/rpc/match_insights",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "xxx"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4aG1jZGN0cHR3YW5tZ2h6cHBuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NzcxMjcsImV4cCI6MjA5OTQ1MzEyN30.j5osRT3xcyiW7vxznQKSP3k_Cj2Cy3BXmMQPuHinenw"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query_embedding",
+              "value": "={{ $('Extract Embedding').item.json.embedding }}"
+            },
+            {
+              "name": "match_threshold",
+              "value": "0.7"
+            },
+            {
+              "name": "match_count",
+              "value": "3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -800,
+        400
+      ],
+      "id": "14b523a9-4ab3-4ba1-8606-ebfb241a676a",
+      "name": "Semantic Search"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\n\nreturn [{\n  json: {\n    question: data.question ? data.question.trim() : '',\n    category: data.category,\n    insight: data.insight,\n    confidence: data.confidence,\n    recommended_action: data.recommended_action,\n    sources_used: data.sources_used ? data.sources_used : '',\n    grounded: data.grounded === true,\n    caution: data.caution === true,\n    bias_flagged: data.bias_flagged === true,\n    bias_note: data.bias_note || null,\n    safety_flagged: data.safety_flagged === true,\n    safety_categories: data.safety_categories ? data.safety_categories : '',\n    embedding: data.embedding\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        560
+      ],
+      "id": "3ed68a58-b4a8-4a8f-8801-131618a6eb98",
+      "name": "Prepare Log Data"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "insights_feedback",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "category",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Prompt').item.json.category }}"
+            },
+            {
+              "keyName": "helpful",
+              "condition": "eq",
+              "keyValue": "true"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7cbfb27f-f42c-4972-8c0d-c54d22331d8e",
+      "name": "Fetch Rated Insights",
+      "credentials": {
+        "supabaseApi": {
+          "id": "V2EvZQEGK2ixNrpW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "insights_feedback",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "question",
+              "fieldValue": "={{ $json.question }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $json.category }}"
+            },
+            {
+              "fieldId": "insight",
+              "fieldValue": "={{ $json.insight }}"
+            },
+            {
+              "fieldId": "confidence",
+              "fieldValue": "={{ $json.confidence }}"
+            },
+            {
+              "fieldId": "recommended_action",
+              "fieldValue": "={{ $json.recommended_action }}"
+            },
+            {
+              "fieldId": "sources_used",
+              "fieldValue": "={{ $json.sources_used }}"
+            },
+            {
+              "fieldId": "grounded",
+              "fieldValue": "={{ $json.grounded }}"
+            },
+            {
+              "fieldId": "caution",
+              "fieldValue": "={{ $json.caution }}"
+            },
+            {
+              "fieldId": "embedding",
+              "fieldValue": "={{ $('Extract Embedding').item.json.embedding }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        560
+      ],
+      "id": "51d62e40-57e3-4c68-acfe-53d538204d73",
+      "name": "Log to Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "V2EvZQEGK2ixNrpW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "0ccfbd17-c5ae-4a49-acfe-cdfdb53f150d",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1136,
+        1024
+      ],
+      "id": "446bd2d8-11b9-4227-bf63-f65b7ba11ae4",
+      "name": "Feedback Webhook",
+      "webhookId": "0ccfbd17-c5ae-4a49-acfe-cdfdb53f150d"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "insights_feedback",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.body.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "helpful",
+              "fieldValue": "={{ $json.body.helpful }}"
+            },
+            {
+              "fieldId": "outcome_note",
+              "fieldValue": "={{ $json.body.outcome_note }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -928,
+        1024
+      ],
+      "id": "2018150e-2747-456d-abde-33bfe6d062e7",
+      "name": "Update Feedback",
+      "credentials": {
+        "supabaseApi": {
+          "id": "V2EvZQEGK2ixNrpW",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "insightai",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1728,
+        608
+      ],
+      "id": "ab699d2b-0143-4675-8c34-b556f45f41b0",
+      "name": "Webhook",
+      "webhookId": "33d78d29-6f22-4659-95ca-fbf38ba5b6d0"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract Question": {
+      "main": [
+        [
+          {
+            "node": "Generate Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Question": {
+      "main": [
+        [
+          {
+            "node": "Fetch Rated Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Classify Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Web Search": {
+      "main": [
+        [
+          {
+            "node": "Extract Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Sources": {
+      "main": [
+        [
+          {
+            "node": "Synthesize Insight",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthesize Insight": {
+      "main": [
+        [
+          {
+            "node": "Parse Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Output": {
+      "main": [
+        [
+          {
+            "node": "LLM Judge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Judge": {
+      "main": [
+        [
+          {
+            "node": "Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Output": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Embedding": {
+      "main": [
+        [
+          {
+            "node": "Extract Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Embedding": {
+      "main": [
+        [
+          {
+            "node": "Semantic Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Parse Safety Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Semantic Search": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Log Data": {
+      "main": [
+        [
+          {
+            "node": "Log to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Safety Result": {
+      "main": [
+        [
+          {
+            "node": "Prepare Log Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Rated Insights": {
+      "main": [
+        [
+          {
+            "node": "Web Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Feedback Webhook": {
+      "main": [
+        [
+          {
+            "node": "Update Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "2366a174-d833-4ee4-a066-e69f96025f15",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f05ef52aeb476141f8ce14f6519817b784c18535683517d9169d6fa11aa58182"
+  },
+  "nodeGroups": [],
+  "id": "CLWvUS5XLwnan4Zp",
+  "tags": []
+}
