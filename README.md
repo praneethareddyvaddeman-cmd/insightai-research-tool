@@ -1,12 +1,12 @@
 # InsightAI — Consumer Research to Action Platform
 
-> Research like the big brands. Without the big budget.
+Research like the big brands. Without the big budget
 
 ---
 
 ## The Problem
 
-Small business brand managers make critical marketing and positioning decisions weekly — which campaign to run, how to position against competitors, whether to launch a new product. Enterprise research tools like Zappi and Kantar cost $10K–$100K+ per year. Agencies take weeks and charge thousands per project. So SMBs make these decisions on gut feel. And gut feel is expensive when you get it wrong.
+Small business brand managers make critical marketing and positioning decisions weekly which campaign to run, how to position against competitors, whether to launch a new product. Enterprise research tools like Zappi and Kantar cost $10K–$100K+ per year. Agencies take weeks and charge thousands per project. So SMBs make these decisions on gut feel. And gut feel is expensive when you get it wrong.
 
 ---
 
