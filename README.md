@@ -18,3 +18,13 @@ Stack
 Status: Active build — pushing daily
 ## Build Log
 - Day 1: Question classification (5 categories), SerpAPI web search grounding, GPT-4.1-mini synthesis pipeline working end to end
+- Day 2: Feedback webhook working, RLHF loop complete, 
+  4 test cases logged in Supabase with helpful ratings
+- - Day 3: Azure text-embedding-3-small integrated, Content Safety 
+  filtering added, full Responsible AI pipeline working end to end
+--Day 4:Vercel UI at insightly-beige.vercel.app 
+Railway n8n pipeline running 
+Azure embeddings + semantic memory 
+LLM Judge grounding check 
+Azure Content Safety + bias detection 
+Supabase RLHF logging 
